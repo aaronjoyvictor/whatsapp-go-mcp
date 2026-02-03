@@ -1,37 +1,40 @@
-# Stage 1: Build with CGO enabled
-FROM golang:1.24-bookworm AS builder
+# Single-stage Alpine build (simpler, smaller, consistent libc)
+FROM golang:1.24-alpine AS builder
 
-# Install C compiler + SQLite dev libs
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libsqlite3-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Install build deps for CGO + SQLite + FFmpeg dev (if needed)
+RUN apk add --no-cache \
+    build-base \
+    sqlite-dev \
+    ffmpeg-dev
 
 WORKDIR /app
 
-# Copy go mod/sum first for caching
+# Cache deps
 COPY src/go.mod src/go.sum ./
 RUN go mod download
 
-# Copy source code
+# Copy source
 COPY src/ .
 
-# Build with CGO enabled
+# Build with CGO (required for go-sqlite3)
 ENV CGO_ENABLED=1
 RUN go build -o whatsapp
 
-# Stage 2: Small runtime image
+# Final runtime (same Alpine base)
 FROM alpine:3.21
 
-# Install runtime deps: FFmpeg + SQLite shared lib
+# Runtime deps: FFmpeg + SQLite runtime lib
 RUN apk add --no-cache \
     ffmpeg \
     sqlite-libs
 
 WORKDIR /app
 
+# Copy binary
 COPY --from=builder /app/whatsapp .
 
+# Expose port
 EXPOSE 8080
 
+# Run MCP mode
 CMD ["./whatsapp", "mcp"]

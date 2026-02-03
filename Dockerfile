@@ -1,5 +1,5 @@
 # Stage 1: Build with CGO enabled
-FROM golang:1.24-bookworm-slim AS builder
+FROM golang:1.24-bookworm AS builder
 
 # Install C compiler + SQLite dev libs
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -16,7 +16,7 @@ RUN go mod download
 # Copy source code
 COPY src/ .
 
-# Build with CGO enabled (critical!)
+# Build with CGO enabled
 ENV CGO_ENABLED=1
 RUN go build -o whatsapp
 
@@ -30,11 +30,8 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-# Copy only the binary from builder
 COPY --from=builder /app/whatsapp .
 
-# Expose MCP port
 EXPOSE 8080
 
-# Run in MCP mode (Railway can override PORT via $PORT if needed)
 CMD ["./whatsapp", "mcp"]
